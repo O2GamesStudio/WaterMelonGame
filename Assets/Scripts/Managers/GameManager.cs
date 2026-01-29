@@ -4,7 +4,7 @@ public class GameManager : MonoBehaviour
 {
     public static GameManager Instance { get; private set; }
 
-    [SerializeField] private FruitData[] fruitDataArray;
+    [SerializeField] private GameObject[] fruitPrefabs;
 
     private int score;
     private int currentMaxLevel = 0;
@@ -22,28 +22,22 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    public FruitData GetFruitData(FruitType type)
+    public GameObject GetFruitPrefab(FruitType type)
     {
         int index = (int)type;
 
-        if (fruitDataArray == null || index < 0 || index >= fruitDataArray.Length)
+        if (fruitPrefabs == null || index < 0 || index >= fruitPrefabs.Length)
         {
-            Debug.LogError($"FruitData not found for type: {type}, index: {index}");
+            Debug.LogError($"Fruit prefab not found for type: {type}");
             return null;
         }
 
-        if (fruitDataArray[index] == null)
-        {
-            Debug.LogError($"FruitData at index {index} is null!");
-            return null;
-        }
-
-        return fruitDataArray[index];
+        return fruitPrefabs[index];
     }
 
     public int GetFruitDataCount()
     {
-        return fruitDataArray != null ? fruitDataArray.Length : 0;
+        return fruitPrefabs != null ? fruitPrefabs.Length : 0;
     }
 
     public void AddScore(int points)

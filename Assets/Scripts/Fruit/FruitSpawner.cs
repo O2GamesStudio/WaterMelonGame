@@ -11,6 +11,7 @@ public class FruitSpawner : MonoBehaviour
     [SerializeField] private LineRenderer trajectoryLine;
     [SerializeField] private TextAsset probabilityConfigJson;
     [SerializeField] private float lineExtensionMultiplier = 3f;
+    [SerializeField] private float spawnDelay = 1f;
 
     private Fruit currentFruit;
     private FruitType nextFruitType;
@@ -84,6 +85,7 @@ public class FruitSpawner : MonoBehaviour
             DropFruit();
         }
     }
+
     void LoadProbabilityConfig()
     {
         if (probabilityConfigJson != null)
@@ -173,13 +175,14 @@ public class FruitSpawner : MonoBehaviour
 
     void SpawnNextFruit()
     {
-        GameObject fruitObj = Instantiate(fruitPrefab, spawnPoint.position, Quaternion.identity);
+        GameObject prefab = GameManager.Instance.GetFruitPrefab(nextFruitType);
+        if (prefab == null) return;
+
+        GameObject fruitObj = Instantiate(prefab, spawnPoint.position, Quaternion.identity);
         currentFruit = fruitObj.GetComponent<Fruit>();
-        currentFruit.Initialize(nextFruitType);
         currentFruit.DisablePhysics();
 
-        FruitData data = GameManager.Instance.GetFruitData(nextFruitType);
-        currentFruitRadius = data.radius;
+        currentFruitRadius = currentFruit.GetRadius();
 
         nextFruitType = GetRandomFruitType();
         UIManager.Instance.UpdateNextFruitUI(nextFruitType);
@@ -191,15 +194,36 @@ public class FruitSpawner : MonoBehaviour
         currentFruit = null;
         currentFruitRadius = 0f;
         GameManager.Instance.IncrementNoMerge();
-        Invoke(nameof(SpawnNextFruit), 1f);
+        Invoke(nameof(SpawnNextFruit), spawnDelay);
     }
 
     public void SpawnMergedFruit(FruitType type, Vector3 position)
     {
-        GameObject fruitObj = Instantiate(fruitPrefab, position, Quaternion.identity);
+        GameObject prefab = GameManager.Instance.GetFruitPrefab(type);
+        if (prefab == null) return;
+
+        GameObject fruitObj = Instantiate(prefab, position, Quaternion.identity);
         Fruit fruit = fruitObj.GetComponent<Fruit>();
-        fruit.Initialize(type);
+
+        float newRadius = fruit.GetRadius();
+        Vector3 clampedPosition = ClampMergePosition(position, newRadius);
+        fruitObj.transform.position = clampedPosition;
+
         fruit.EnablePhysics();
+    }
+    Vector3 ClampMergePosition(Vector3 position, float newRadius)
+    {
+        float minX = -containerHalfWidth + newRadius;
+        float maxX = containerHalfWidth - newRadius;
+
+        position.x = Mathf.Clamp(position.x, minX, maxX);
+
+        return position;
+    }
+
+    public float GetContainerHalfWidth()
+    {
+        return containerHalfWidth;
     }
 
     FruitType GetRandomFruitType()

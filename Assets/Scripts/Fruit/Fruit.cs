@@ -3,7 +3,14 @@ using UnityEngine;
 [RequireComponent(typeof(Rigidbody2D), typeof(CircleCollider2D), typeof(SpriteRenderer))]
 public class Fruit : MonoBehaviour
 {
-    private FruitType fruitType;
+    [SerializeField] private FruitType fruitType;
+    [SerializeField] private float radius;
+    [SerializeField] private int score;
+    [SerializeField] private float pushStrength = 3f;
+    [SerializeField] private float explosionRadiusMultiplier = 2f;
+    [SerializeField] private float explosionForce = 5f;
+    [SerializeField] private float mass = 1f;
+
     private Rigidbody2D rb;
     private CircleCollider2D col;
     private SpriteRenderer sr;
@@ -15,53 +22,51 @@ public class Fruit : MonoBehaviour
         rb = GetComponent<Rigidbody2D>();
         col = GetComponent<CircleCollider2D>();
         sr = GetComponent<SpriteRenderer>();
-
-        if (sr.sprite == null)
-        {
-            sr.sprite = CreateCircleSprite();
-        }
     }
 
-    Sprite CreateCircleSprite()
+    void Start()
     {
-        int resolution = 64;
-        Texture2D texture = new Texture2D(resolution, resolution);
-        Vector2 center = new Vector2(resolution / 2f, resolution / 2f);
-        float radius = resolution / 2f;
-
-        for (int y = 0; y < resolution; y++)
-        {
-            for (int x = 0; x < resolution; x++)
-            {
-                float distance = Vector2.Distance(new Vector2(x, y), center);
-                Color color = distance <= radius ? Color.white : Color.clear;
-                texture.SetPixel(x, y, color);
-            }
-        }
-
-        texture.Apply();
-        return Sprite.Create(texture, new Rect(0, 0, resolution, resolution), new Vector2(0.5f, 0.5f));
-    }
-
-    public void Initialize(FruitType type)
-    {
-        fruitType = type;
-        FruitData data = GameManager.Instance.GetFruitData(type);
-
-        transform.localScale = Vector3.one * data.radius * 2f;
-        col.radius = 0.5f;
-
-        Color color = data.color;
-        color.a = 1f;
-        sr.color = color;
-
-        rb.mass = data.mass;
+        rb.mass = mass;
         rb.linearDamping = 0.5f;
         rb.angularDamping = 0.5f;
         rb.gravityScale = 1f;
         rb.collisionDetectionMode = CollisionDetectionMode2D.Continuous;
         rb.interpolation = RigidbodyInterpolation2D.Interpolate;
-        rb.bodyType = RigidbodyType2D.Dynamic;
+    }
+
+    public void SetFruitType(FruitType type)
+    {
+        fruitType = type;
+    }
+
+    public FruitType GetFruitType()
+    {
+        return fruitType;
+    }
+
+    public float GetRadius()
+    {
+        return radius;
+    }
+
+    public int GetScore()
+    {
+        return score;
+    }
+
+    public float GetPushStrength()
+    {
+        return pushStrength;
+    }
+
+    public float GetExplosionRadiusMultiplier()
+    {
+        return explosionRadiusMultiplier;
+    }
+
+    public float GetExplosionForce()
+    {
+        return explosionForce;
     }
 
     public void EnablePhysics()
@@ -111,12 +116,11 @@ public class Fruit : MonoBehaviour
         Vector3 mergePosition = (transform.position + other.transform.position) / 2f;
         FruitType nextType = (FruitType)((int)fruitType + 1);
 
-        FruitData data = GameManager.Instance.GetFruitData(fruitType);
-        GameManager.Instance.AddScore(data.score);
+        GameManager.Instance.AddScore(score);
         GameManager.Instance.UpdateMaxLevel((int)nextType);
         GameManager.Instance.ResetNoMerge();
 
-        ApplyPushForce(mergePosition);
+        ApplyPushForce(mergePosition, nextType);
 
         FruitSpawner.Instance.SpawnMergedFruit(nextType, mergePosition);
 
@@ -124,15 +128,21 @@ public class Fruit : MonoBehaviour
         Destroy(gameObject);
     }
 
-    void ApplyPushForce(Vector3 explosionPosition)
+    void ApplyPushForce(Vector3 explosionPosition, FruitType nextType)
     {
-        int nextIndex = (int)fruitType + 1;
-        FruitData nextData = GameManager.Instance.GetFruitData((FruitType)nextIndex);
+        GameObject nextPrefab = GameManager.Instance.GetFruitPrefab(nextType);
+        if (nextPrefab == null) return;
 
-        float newRadius = nextData.radius;
-        float pushRadius = newRadius * 2f;
+        Fruit nextFruit = nextPrefab.GetComponent<Fruit>();
+        float newRadius = nextFruit.GetRadius();
+        float nextPushStrength = nextFruit.GetPushStrength();
+        float nextExplosionRadiusMultiplier = nextFruit.GetExplosionRadiusMultiplier();
+        float nextExplosionForce = nextFruit.GetExplosionForce();
 
-        Collider2D[] colliders = Physics2D.OverlapCircleAll(explosionPosition, pushRadius);
+        float explosionRadius = newRadius * nextExplosionRadiusMultiplier;
+        float maxRadius = Mathf.Max(newRadius * 2f, explosionRadius);
+
+        Collider2D[] colliders = Physics2D.OverlapCircleAll(explosionPosition, maxRadius);
 
         foreach (Collider2D col in colliders)
         {
@@ -142,14 +152,43 @@ public class Fruit : MonoBehaviour
                 Vector2 pushDirection = ((Vector2)col.transform.position - (Vector2)explosionPosition).normalized;
                 float distance = Vector2.Distance(col.transform.position, explosionPosition);
 
-                float requiredSpace = newRadius + col.bounds.extents.x;
+                float totalForce = 0f;
 
+                float requiredSpace = newRadius + col.bounds.extents.x;
                 if (distance < requiredSpace)
                 {
                     float overlapRatio = 1f - (distance / requiredSpace);
-                    float pushForce = nextData.pushStrength * overlapRatio;
+                    totalForce += nextPushStrength * overlapRatio;
+                }
 
-                    targetRb.AddForce(pushDirection * pushForce, ForceMode2D.Impulse);
+                if (distance < explosionRadius)
+                {
+                    float explosionRatio = 1f - (distance / explosionRadius);
+                    totalForce += nextExplosionForce * explosionRatio;
+                }
+
+                if (totalForce > 0f)
+                {
+                    if (col.transform.position.y > explosionPosition.y)
+                    {
+                        totalForce *= 0.6f;
+                    }
+                    else
+                    {
+                        totalForce *= 1.2f;
+                    }
+
+                    Vector2 enhancedDirection = pushDirection;
+                    enhancedDirection.x *= 1.5f;
+                    enhancedDirection = enhancedDirection.normalized;
+
+                    if (enhancedDirection.y > 0f)
+                    {
+                        enhancedDirection.y *= 0.5f;
+                        enhancedDirection = enhancedDirection.normalized;
+                    }
+
+                    targetRb.AddForce(enhancedDirection * totalForce, ForceMode2D.Impulse);
                 }
             }
         }

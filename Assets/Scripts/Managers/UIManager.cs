@@ -46,12 +46,15 @@ public class UIManager : MonoBehaviour
     {
         if (nextObjectImage != null)
         {
-            FruitData data = GameManager.Instance.GetFruitData(nextFruitType);
-            if (data != null)
+            GameObject prefab = GameManager.Instance.GetFruitPrefab(nextFruitType);
+            if (prefab != null)
             {
-                Color color = data.color;
-                color.a = 1f;
-                nextObjectImage.color = color;
+                SpriteRenderer sr = prefab.GetComponent<SpriteRenderer>();
+                if (sr != null && sr.sprite != null)
+                {
+                    nextObjectImage.sprite = sr.sprite;
+                    nextObjectImage.color = Color.white;
+                }
             }
         }
     }
