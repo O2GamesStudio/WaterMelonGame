@@ -9,9 +9,8 @@ public class FruitSpawner : MonoBehaviour
     [SerializeField] private Transform spawnPoint;
     [SerializeField] private float containerHalfWidth = 2f;
     [SerializeField] private LineRenderer trajectoryLine;
-    [SerializeField] private int trajectoryPoints = 10;
-    [SerializeField] private float trajectoryTimeStep = 0.15f;
     [SerializeField] private TextAsset probabilityConfigJson;
+    [SerializeField] private float lineExtensionMultiplier = 3f;
 
     private Fruit currentFruit;
     private FruitType nextFruitType;
@@ -19,6 +18,9 @@ public class FruitSpawner : MonoBehaviour
     private bool isDragging = false;
     private float currentFruitRadius = 0f;
     private SpawnProbabilityConfig probabilityConfig;
+    private int containerFruitLayerMask;
+    private RaycastHit2D[] raycastHitBuffer = new RaycastHit2D[10];
+    private const float maxRayDistance = 20f;
 
     void Awake()
     {
@@ -32,14 +34,23 @@ public class FruitSpawner : MonoBehaviour
         }
 
         mainCamera = Camera.main;
+        containerFruitLayerMask = LayerMask.GetMask("Container", "Fruit");
 
         if (trajectoryLine != null)
         {
             trajectoryLine.enabled = false;
+            trajectoryLine.positionCount = 2;
         }
 
         LoadProbabilityConfig();
     }
+
+    void Start()
+    {
+        nextFruitType = GetRandomFruitType();
+        SpawnNextFruit();
+    }
+
     void Update()
     {
         if (currentFruit == null) return;
@@ -48,9 +59,8 @@ public class FruitSpawner : MonoBehaviour
         if (touchPosition != Vector2.zero)
         {
             Vector3 worldPos = mainCamera.ScreenToWorldPoint(new Vector3(touchPosition.x, touchPosition.y, 10f));
-            float halfSize = currentFruitRadius;
-            float clampedX = Mathf.Clamp(worldPos.x, -containerHalfWidth + halfSize, containerHalfWidth - halfSize);
-            currentFruit.transform.position = new Vector3(clampedX, this.transform.position.y, 0f);
+            float clampedX = Mathf.Clamp(worldPos.x, -containerHalfWidth + currentFruitRadius, containerHalfWidth - currentFruitRadius);
+            currentFruit.transform.position = new Vector3(clampedX, transform.position.y, 0f);
 
             if (!isDragging)
             {
@@ -74,7 +84,6 @@ public class FruitSpawner : MonoBehaviour
             DropFruit();
         }
     }
-
     void LoadProbabilityConfig()
     {
         if (probabilityConfigJson != null)
@@ -87,59 +96,49 @@ public class FruitSpawner : MonoBehaviour
         }
     }
 
-    void Start()
-    {
-        nextFruitType = GetRandomFruitType();
-        SpawnNextFruit();
-    }
     void UpdateTrajectory(Vector3 startPosition)
     {
         if (trajectoryLine == null) return;
 
-        Vector2 origin = startPosition;
-        Vector2 direction = Vector2.down;
-        float maxDistance = 20f;
+        int hitCount = Physics2D.RaycastNonAlloc(startPosition, Vector2.down, raycastHitBuffer, maxRayDistance, containerFruitLayerMask);
 
-        int layerMask = LayerMask.GetMask("Container", "Fruit");
-        RaycastHit2D[] hits = Physics2D.RaycastAll(origin, direction, maxDistance, layerMask);
-
-        trajectoryLine.positionCount = 2;
-        trajectoryLine.SetPosition(0, startPosition);
-
-        RaycastHit2D validHit = default;
-        float closestDistance = maxDistance;
+        float closestDistance = maxRayDistance;
         bool foundHit = false;
 
-        foreach (var hit in hits)
+        for (int i = 0; i < hitCount; i++)
         {
-            if (currentFruit != null && hit.collider.gameObject == currentFruit.gameObject)
+            if (raycastHitBuffer[i].collider.gameObject == currentFruit.gameObject)
             {
                 continue;
             }
 
-            if (hit.distance < closestDistance)
+            if (raycastHitBuffer[i].distance < closestDistance)
             {
-                closestDistance = hit.distance;
-                validHit = hit;
+                closestDistance = raycastHitBuffer[i].distance;
                 foundHit = true;
             }
         }
 
-        if (foundHit)
-        {
-            float extensionMultiplier = 3f;
-            Vector3 hitPoint = validHit.point;
-            Vector3 extendedPoint = (Vector3)origin + (Vector3)(direction * validHit.distance * extensionMultiplier);
+        float totalDistance = foundHit ? closestDistance * lineExtensionMultiplier : maxRayDistance;
+        float segmentLength = 0.15f;
+        int segments = Mathf.FloorToInt(totalDistance / segmentLength);
 
-            trajectoryLine.SetPosition(1, extendedPoint);
-            Debug.DrawLine(startPosition, extendedPoint, Color.green);
-        }
-        else
+        trajectoryLine.positionCount = segments * 2;
+
+        int posIndex = 0;
+        for (int i = 0; i < segments; i++)
         {
-            Vector3 endPoint = startPosition + Vector3.down * maxDistance;
-            trajectoryLine.SetPosition(1, endPoint);
-            Debug.DrawLine(startPosition, endPoint, Color.yellow);
+            if (i % 2 == 0)
+            {
+                float startDist = i * segmentLength;
+                float endDist = (i + 0.5f) * segmentLength;
+
+                trajectoryLine.SetPosition(posIndex++, startPosition + Vector3.down * startDist);
+                trajectoryLine.SetPosition(posIndex++, startPosition + Vector3.down * endDist);
+            }
         }
+
+        trajectoryLine.positionCount = posIndex;
     }
 
     Vector2 GetInputPosition()
@@ -208,14 +207,12 @@ public class FruitSpawner : MonoBehaviour
         int activeFruits = GameManager.Instance.GetActiveFruitCount();
         int noMergeCount = GameManager.Instance.GetConsecutiveNoMerge();
 
-        int spawnMax = 4;
-
         float[] probabilities = GetProbabilities(maxLevel, activeFruits, noMergeCount);
 
         float randomValue = Random.Range(0f, 1f);
         float cumulative = 0f;
 
-        for (int i = 0; i <= spawnMax; i++)
+        for (int i = 0; i < 5; i++)
         {
             cumulative += probabilities[i];
             if (randomValue <= cumulative)
@@ -224,8 +221,9 @@ public class FruitSpawner : MonoBehaviour
             }
         }
 
-        return (FruitType)0;
+        return FruitType.Cherry;
     }
+
     float[] GetProbabilities(int maxLevel, int activeFruits, int noMergeCount)
     {
         if (probabilityConfig == null) return new float[] { 1f, 0f, 0f, 0f, 0f };
@@ -236,10 +234,8 @@ public class FruitSpawner : MonoBehaviour
         {
             if (maxLevel <= set.maxLevelThreshold)
             {
-                for (int i = 0; i < Mathf.Min(probs.Length, set.probabilities.Length); i++)
-                {
-                    probs[i] = set.probabilities[i];
-                }
+                int copyLength = Mathf.Min(probs.Length, set.probabilities.Length);
+                System.Array.Copy(set.probabilities, probs, copyLength);
                 break;
             }
         }
@@ -249,30 +245,27 @@ public class FruitSpawner : MonoBehaviour
             float boost = probabilityConfig.emergencyBoost;
             probs[0] += boost * 0.7f;
             probs[1] += boost * 0.3f;
-            for (int i = 2; i < probs.Length; i++)
-            {
-                probs[i] *= 0.85f;
-            }
+            probs[2] *= 0.85f;
+            probs[3] *= 0.85f;
+            probs[4] *= 0.85f;
         }
 
         if (noMergeCount >= probabilityConfig.noMergeThreshold)
         {
             probs[0] += probabilityConfig.noMergeBoost;
-            for (int i = 1; i < probs.Length; i++)
-            {
-                probs[i] *= 0.8f;
-            }
+            probs[1] *= 0.8f;
+            probs[2] *= 0.8f;
+            probs[3] *= 0.8f;
+            probs[4] *= 0.8f;
         }
 
-        float sum = 0f;
-        for (int i = 0; i < probs.Length; i++)
-        {
-            sum += probs[i];
-        }
-        for (int i = 0; i < probs.Length; i++)
-        {
-            probs[i] /= sum;
-        }
+        float sum = probs[0] + probs[1] + probs[2] + probs[3] + probs[4];
+        float invSum = 1f / sum;
+        probs[0] *= invSum;
+        probs[1] *= invSum;
+        probs[2] *= invSum;
+        probs[3] *= invSum;
+        probs[4] *= invSum;
 
         return probs;
     }
