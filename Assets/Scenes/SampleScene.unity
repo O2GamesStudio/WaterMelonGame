@@ -1200,6 +1200,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 50f1383ce50f1c348b86cc2e0885a54b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::UIManager
+  scoreText: {fileID: 292193874}
+  countUpSpeed: 100
 --- !u!1 &1380821734
 GameObject:
   m_ObjectHideFlags: 0

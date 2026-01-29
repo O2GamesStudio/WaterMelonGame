@@ -15,7 +15,6 @@ MonoBehaviour:
   type: 6
   radius: 1.3
   color: {r: 0.6792453, g: 0.5728044, b: 0.13136347, a: 0}
-  score: 1
-  explosionRadiusMultiplier: 1.5
-  explosionForce: 1
+  score: 28
   mass: 5
+  pushStrength: 5

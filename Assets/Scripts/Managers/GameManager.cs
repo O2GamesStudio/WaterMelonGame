@@ -49,6 +49,7 @@ public class GameManager : MonoBehaviour
     public void AddScore(int points)
     {
         score += points;
+        UIManager.Instance.UpdateScoreUI(score);
     }
 
     public int GetScore()
