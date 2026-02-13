@@ -176,6 +176,6 @@ MonoBehaviour:
   explosionRadiusMultiplier: 2
   explosionForce: 1
   mass: 1
-  mergeSfx: {fileID: 8300000, guid: 1635e404c1cd0ec489b6b423504c4c03, type: 3}
+  mergeSfx: {fileID: 8300000, guid: 3110e52a2a86e034bb2362f7c7a8da2f, type: 3}
   combineVFXPrefab: {fileID: 5066406694558635586, guid: 6244267469c1f624db3d82d3da450f64, type: 3}
   vfxScaleMultiplier: 1

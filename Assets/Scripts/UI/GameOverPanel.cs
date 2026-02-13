@@ -14,6 +14,17 @@ public class GameOverPanel : MonoBehaviour
     private void Awake()
     {
         retryBtn.onClick.AddListener(OnRetryClicked);
+        SetupAds();
+    }
+
+    private void SetupAds()
+    {
+        if (UnityAdsManager.Instance != null)
+        {
+            UnityAdsManager.Instance.OnRewardEarned += OnAdRewardEarned;
+            UnityAdsManager.Instance.OnAdClosed += OnAdClosed;
+            UnityAdsManager.Instance.OnAdFailedToShow += OnAdFailedToShow;
+        }
     }
 
     public void Show(int currentScore)
@@ -35,6 +46,33 @@ public class GameOverPanel : MonoBehaviour
 
     private void OnRetryClicked()
     {
+        if (UnityAdsManager.Instance != null && UnityAdsManager.Instance.IsAdLoaded())
+        {
+            UnityAdsManager.Instance.ShowRewardedAd();
+        }
+        else
+        {
+            RestartGame();
+        }
+    }
+
+    private void OnAdRewardEarned()
+    {
+        RestartGame();
+    }
+
+    private void OnAdClosed()
+    {
+        RestartGame();
+    }
+
+    private void OnAdFailedToShow()
+    {
+        RestartGame();
+    }
+
+    private void RestartGame()
+    {
         Time.timeScale = 1f;
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex);
     }
@@ -42,5 +80,12 @@ public class GameOverPanel : MonoBehaviour
     private void OnDestroy()
     {
         retryBtn.onClick.RemoveListener(OnRetryClicked);
+
+        if (UnityAdsManager.Instance != null)
+        {
+            UnityAdsManager.Instance.OnRewardEarned -= OnAdRewardEarned;
+            UnityAdsManager.Instance.OnAdClosed -= OnAdClosed;
+            UnityAdsManager.Instance.OnAdFailedToShow -= OnAdFailedToShow;
+        }
     }
 }
